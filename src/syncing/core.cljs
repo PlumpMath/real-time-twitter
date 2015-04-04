@@ -8,6 +8,8 @@
 
 (defonce app-state 
   (atom {:tweet ""
+         :auth {:name ""
+                :id nil}
          :users [{:id 1 :name "Arya" :following? true}
                  {:id 2 :name "Tyron" :following? false}]
          :feed [{:id 1 :user 1 :text "Valar Morghulis"}
@@ -63,11 +65,22 @@
         (apply dom/div nil
                (om/build-all tweet data)))))
 
+(defn register [auth owner]
+  (om/component
+   (dom/div nil
+            (dom/input 
+             #js {:onChange #(om/update! auth :name (.. % -target -value))
+                  :value (:name auth)})
+            (dom/button 
+             #js {:onClick (fn [_] (println (:name auth)))}
+             "Register"))))
+
 (defn skeleton [data owner]
   (reify om/IRender
     (render [_]
       (dom/div nil
                (dom/h1 nil "Twitter Client")
+               (om/build register (:auth data))
                (om/build follow (:users data))
                (om/build feed (:feed data))
                (om/build twitter data)))))
