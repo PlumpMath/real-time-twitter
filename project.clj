@@ -11,6 +11,7 @@
                  [compojure "1.3.3"]
                  [com.taoensso/sente "1.4.1"] 
                  [http-kit "2.1.16"]
+                 [ring "1.3.1"]
                  [sablono "0.3.4"]
                  [org.omcljs/om "0.8.8"]]
 
