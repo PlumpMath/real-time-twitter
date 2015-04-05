@@ -7,29 +7,46 @@
 
 (enable-console-print!)
 
-;; Sync
-
-(let [{:keys [chsk ch-recv send-fn state]}
-      (sente/make-channel-socket! "/chsk" ; Note the same path as before
-       {:type :auto ; e/o #{:auto :ajax :ws}
-       })]
-  (def chsk       chsk)
-  (def ch-chsk    ch-recv) ; ChannelSocket's receive channel
-  (def chsk-send! send-fn) ; ChannelSocket's send API fn
-  (def chsk-state state)   ; Watchable, read-only atom
-  )
-
-
-;; View
+;; Data
 
 (defonce app-state 
   (atom {:tweet ""
          :auth {:name ""
                 :id nil}
-         :users [{:id 1 :name "Arya" :following? true}
-                 {:id 2 :name "Tyron" :following? false}]
+         :users []
          :feed [{:id 1 :user 1 :text "Valar Morghulis"}
                 {:id 2 :user 2 :text "I have a lots of gold"}]}))
+
+(defmulti resource-handler #(first %))
+
+(defmethod resource-handler :default [event]
+  (println event))
+
+(defmethod resource-handler :user/stream [event]
+  (swap! app-state #(assoc % :users (second event))))
+
+;; Sync
+
+(let [{:keys [chsk ch-recv send-fn state]}
+      (sente/make-channel-socket! "/chsk" {:type :ws})]
+  (def chsk       chsk)
+  (def ch-chsk    ch-recv)
+  (def chsk-send! send-fn)
+  (def chsk-state state))
+
+(defmulti event-msg-handler :id)
+
+(defmethod event-msg-handler :default [msg]
+  (println (:event msg)))
+
+(defmethod event-msg-handler :chsk/recv [msg]
+  (resource-handler (second (:event msg))))
+
+(def user-id (atom nil))
+
+(sente/start-chsk-router! ch-chsk event-msg-handler)
+
+;; View
 
 (defn twitter [data owner]
   (reify
@@ -41,7 +58,7 @@
       (let [tweet-ch (om/get-state owner :tweet-ch)]
         (go-loop []
           (let [msg (<! tweet-ch)]
-            (println msg)))))
+            (println "got here")))))
     om/IRenderState
     (render-state [_ {:keys [tweet-ch]}]
       (dom/div nil
@@ -49,8 +66,7 @@
                 #js {:onChange #(om/update! data :tweet (.. % -target -value))
                      :value (:tweet data)})
                (dom/button #js {:onClick (fn [_] 
-                                           (put! tweet-ch (:tweet data)) 
-                                           nil)}
+                                           (chsk-send! [:sync/create "yeah"]))}
                            "Tweet!")))))
 
 (defn user-component [user owner]
@@ -88,7 +104,7 @@
              #js {:onChange #(om/update! auth :name (.. % -target -value))
                   :value (:name auth)})
             (dom/button 
-             #js {:onClick (fn [_] (println (:name auth)))}
+             #js {:onClick (fn [_] (chsk-send! [:user/create (:name auth)]))}
              "Register"))))
 
 (defn skeleton [data owner]
